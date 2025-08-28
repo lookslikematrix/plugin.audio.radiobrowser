@@ -10,6 +10,13 @@ import xbmcvfs
 
 import requests
 
+# Uncomment this import to enable debugging using the web_pdb addon
+# import web_pdb;
+#
+# Dynamic breakpoints are not supported:
+# put this line in the code where you want the debugger to break
+# web_pdb.set_trace()
+
 
 def get_text(id):
     addon = xbmcaddon.Addon(id=PLUGIN_ID)
@@ -24,12 +31,19 @@ def get_argument(arguments, text):
         argument = argument[0]
     return argument
 
-def add_directory(base_url, addon_handle, name: str, attributes: dict):
+def add_directory(base_url, addon_handle, name: str, attributes: dict, size: int = -1):
     localUrl = build_url(
         base_url,
         attributes
     )
     list_item = xbmcgui.ListItem(name)
+    if size >= 0:
+        list_item.setInfo(
+            type="music",
+            infoLabels={
+                "size": size
+            }
+        )
     list_item.setArt(
         {
             "icon": "DefaultFolder.png"
@@ -37,16 +51,20 @@ def add_directory(base_url, addon_handle, name: str, attributes: dict):
     )
     xbmcplugin.addDirectoryItem(handle=addon_handle, url=localUrl, listitem=list_item, isFolder=True)
 
+
 def add_index_item(base_url, addon_handle, text_id: int, route: str):
     attributes = {
         "route": route
     }
     add_directory(base_url, addon_handle, get_text(text_id), attributes)
 
+
 def add_station_item(base_url, addon_handle, route, station, is_my_station: bool = False):
     name = station["name"]
     favicon = station["favicon"]
     bitrate = station["bitrate"]
+    votes = station["votes"]
+    tags = station["tags"]
     stationuuid = station["stationuuid"]
     localUrl = build_url(
         base_url,
@@ -66,11 +84,13 @@ def add_station_item(base_url, addon_handle, route, station, is_my_station: bool
     list_item.setInfo(
         type="music",
         infoLabels={
-            "size":bitrate
+            "size": bitrate * 1024
         }
     )
     music_info = list_item.getMusicInfoTag()
     music_info.setTitle(name)
+    music_info.setGenres(tags.split(","))
+    music_info.setListeners(votes)
 
     if not is_my_station:
         contextUrl = build_url(
@@ -93,11 +113,14 @@ def add_station_item(base_url, addon_handle, route, station, is_my_station: bool
 
     xbmcplugin.addDirectoryItem(handle=addon_handle, url=localUrl, listitem=list_item, isFolder=False)
 
+
 def add_stations(endpoint):
     stations = request_radio_browser_api(endpoint)
     for station in stations:
-        add_station_item(base_url, addon_handle, "play",station)
+        add_station_item(base_url, addon_handle, "play", station)
 
+    xbmcplugin.addSortMethod(addon_handle, xbmcplugin.SORT_METHOD_LABEL)
+    xbmcplugin.addSortMethod(addon_handle, xbmcplugin.SORT_METHOD_LISTENERS)
     xbmcplugin.endOfDirectory(addon_handle)
 
 
@@ -143,6 +166,7 @@ def router(base_url, addon_handle, arguments):
             station = request_radio_browser_api(f"/json/stations/byuuid/{station}")[0]
             add_station_item(base_url, addon_handle, "play", station, is_my_station = True)
 
+        xbmcplugin.addSortMethod(addon_handle, xbmcplugin.SORT_METHOD_LABEL)
         xbmcplugin.endOfDirectory(addon_handle)
         return
 
@@ -220,8 +244,10 @@ def router(base_url, addon_handle, arguments):
                 "route": "tag",
                 "tag": tag["name"]
             }
-            add_directory(base_url, addon_handle, tag["name"], attributes)
+            add_directory(base_url, addon_handle, tag["name"], attributes, tag["stationcount"])
 
+        xbmcplugin.addSortMethod(addon_handle, xbmcplugin.SORT_METHOD_LABEL)
+        xbmcplugin.addSortMethod(addon_handle, xbmcplugin.SORT_METHOD_SIZE)
         xbmcplugin.endOfDirectory(addon_handle)
         return
 
@@ -233,8 +259,10 @@ def router(base_url, addon_handle, arguments):
                 "route": "country",
                 "countrycode": country["iso_3166_1"]
             }
-            add_directory(base_url, addon_handle, country["name"], attributes)
+            add_directory(base_url, addon_handle, country["name"], attributes, country["stationcount"])
 
+        xbmcplugin.addSortMethod(addon_handle, xbmcplugin.SORT_METHOD_LABEL)
+        xbmcplugin.addSortMethod(addon_handle, xbmcplugin.SORT_METHOD_SIZE)
         xbmcplugin.endOfDirectory(addon_handle)
         return
 

@@ -118,7 +118,15 @@ def request_radio_browser_api(endpoint):
     xbmc.log(f"[ {request} ] Request URL")
     response = requests.get(request)
     response.raise_for_status()
-    return response.json()
+    try:
+        response_json = response.json()
+    except ValueError:
+        xbmc.log(f"[ {request} ] Response is not valid JSON")
+        return []
+    if not isinstance(response_json, list) or not response_json:
+        xbmc.log(f"[ {request} ] Unexpected or empty result: {type(response_json)}")
+        return []
+    return response_json
 
 
 def load_my_stations():
@@ -140,9 +148,10 @@ def router(base_url, addon_handle, arguments):
     if route == "mystations":
         my_stations = load_my_stations()
         for station in my_stations["stations"]:
-            station = request_radio_browser_api(f"/json/stations/byuuid/{station}")[0]
-            add_station_item(base_url, addon_handle, "play", station, is_my_station = True)
-
+            station = request_radio_browser_api(f"/json/stations/byuuid/{station}")
+            if station:
+                station = station[0]
+                add_station_item(base_url, addon_handle, "play", station, is_my_station = True)
         xbmcplugin.endOfDirectory(addon_handle)
         return
 
